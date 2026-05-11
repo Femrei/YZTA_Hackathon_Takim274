@@ -388,7 +388,7 @@ export function SuperAdmin() {
             <Cpu className="w-5 h-5 text-white" />
           </div>
           <div>
-            <div className={`font-bold text-base tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>DigiCo</div>
+            <div className={`font-bold text-base tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>DigiCoBig</div>
             <div className="text-xs text-slate-400">Super Admin Paneli</div>
           </div>
           <div className="ml-3 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-100 text-red-700">
@@ -637,7 +637,7 @@ export function SuperAdmin() {
         </div>
 
         <p className={`text-center text-xs ${isDark ? 'text-slate-600' : 'text-slate-300'}`}>
-          DigiCo Super Admin · /super-admin · Sadece platform geliştiricileri için
+          DigiCoBig Super Admin · /super-admin · Sadece platform geliştiricileri için
         </p>
       </div>
     </div>

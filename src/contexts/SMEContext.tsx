@@ -132,7 +132,7 @@ const smeConfigs: Record<SMEType, Omit<SMEConfig, 'type'>> = {
   agriculture: { id: 'sme-001', name: 'Ege Kooperatifi', joinDate: '15 Ocak 2025', ownerName: 'Ayşe Kaya', region: 'İzmir', ticketCount: 3 },
   technology: { id: 'sme-003', name: 'TechStart İzmir A.Ş.', joinDate: '22 Şubat 2025', ownerName: 'Berk Yılmaz', region: 'İzmir', ticketCount: 5 },
   handcraft: { id: 'sme-004', name: 'Kapadokya El Sanatları', joinDate: '10 Mart 2025', ownerName: 'Elif Güneş', region: 'Nevşehir', ticketCount: 0 },
-  general: { id: 'sme-007', name: 'DigiCo Demo İşletmesi', joinDate: '1 Mayıs 2025', ownerName: 'Platform Kullanıcısı', region: 'İstanbul', ticketCount: 0 },
+  general: { id: 'sme-007', name: 'DigiCoBig Demo İşletmesi', joinDate: '1 Mayıs 2025', ownerName: 'Platform Kullanıcısı', region: 'İstanbul', ticketCount: 0 },
 };
 
 export function SMEProvider({ children, lockedType }: { children: ReactNode; lockedType?: SMEType }) {

@@ -269,7 +269,7 @@ export function AyarlarAdmin() {
             <Card>
               <div className="flex items-start justify-between mb-5">
                 <div>
-                  <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-800'}`}>DigiCo Pro Plan</h2>
+                  <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-800'}`}>DigiCoBig Pro Plan</h2>
                   <div className={`text-sm mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Aktif — Sonraki yenileme: 15 Haziran 2026</div>
                 </div>
                 <div className={`px-4 py-1.5 rounded-xl text-sm font-semibold ${isDark ? 'bg-emerald-900/40 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>

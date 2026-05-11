@@ -70,7 +70,7 @@ export function TeknikDestek() {
           <div>
             <h2 className={`font-semibold text-lg ${isDark ? 'text-white' : 'text-slate-800'}`}>Destek Talebi Oluştur</h2>
             <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-              DigiCo platform ekibi genellikle 24 saat içinde yanıt verir.
+              DigiCoBig platform ekibi genellikle 24 saat içinde yanıt verir.
             </p>
           </div>
         </div>
@@ -242,7 +242,7 @@ export function TeknikDestek() {
                     <p className={`text-sm mb-2 ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>{ticket.message}</p>
                     {ticket.reply && (
                       <div className={`p-3 rounded-xl text-xs border-l-2 border-blue-500 ${isDark ? 'bg-blue-900/20 text-blue-300' : 'bg-blue-50 text-blue-700'}`}>
-                        <span className="font-semibold">DigiCo Destek: </span>{ticket.reply}
+                        <span className="font-semibold">DigiCoBig Destek: </span>{ticket.reply}
                         {ticket.repliedAt && <span className={`ml-2 ${isDark ? 'text-blue-400/60' : 'text-blue-400'}`}>· {ticket.repliedAt}</span>}
                       </div>
                     )}

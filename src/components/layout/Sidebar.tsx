@@ -88,20 +88,36 @@ export function Sidebar() {
         }`}
         style={{ boxShadow: '4px 0 24px rgba(0,0,0,0.06)' }}
       >
-        {/* Logo */}
+        {/* Logo Bölümü */}
         <div
           className={`flex items-center gap-3 px-4 py-5 border-b flex-shrink-0 cursor-pointer ${isDark ? 'border-slate-700' : 'border-slate-100'}`}
           onClick={() => navigate(user.role === 'admin' ? '/admin' : user.role === 'employee' ? '/calisan' : '/musteri')}
         >
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center flex-shrink-0">
-            <Cpu className="w-5 h-5 text-white" />
-          </div>
+          {/* Logo yolu ve boyutu düzenlendi */}
+          <img 
+            src="/DigiCoBigLogo.png" 
+            alt="DigiCoBig Logo" 
+            className={`${collapsed ? 'w-10 h-10' : 'w-14 h-14'} object-contain flex-shrink-0 transition-all duration-200`} 
+            onError={(e) => {
+              // Eğer logo yüklenemezse alternatif bir metin veya hata yönetimi eklenebilir
+              console.error("Logo yüklenemedi, lütfen /public/DigiCoBigLogo.png dosyasını kontrol edin.");
+            }}
+          />
+          
           <AnimatePresence>
             {!collapsed && (
-              <motion.div initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
-                <div className={`font-bold text-base leading-none tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>DigiCo</div>
-                <div className="text-xs text-slate-400 mt-0.5 whitespace-nowrap">
-                  {user.companyName || 'KOBİ Operasyonel Otopilotu'}
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }} 
+                animate={{ opacity: 1, x: 0 }} 
+                exit={{ opacity: 0, x: -10 }} 
+                transition={{ duration: 0.2 }}
+                className="min-w-0"
+              >
+                <div className={`font-bold text-xl leading-none tracking-tight ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                  DigiCoBig
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider truncate">
+                  {user.companyName || 'KOBİ OTOPİLOTU'}
                 </div>
               </motion.div>
             )}

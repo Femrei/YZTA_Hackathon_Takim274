@@ -1,4 +1,13 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from '../services/firebase';
 import { SMEType } from './SMEContext';
 
 export type UserRole = 'admin' | 'employee' | 'customer' | 'superadmin';
@@ -10,97 +19,174 @@ export interface User {
   role: UserRole;
   industryType: SMEType;
   companyName: string;
+  companyId?: string;
+}
+
+interface RegisterData {
+  email: string;
+  password: string;
+  name: string;
+  role: UserRole;
+  industryType?: SMEType;
+  companyId?: string;     // çalışan için şirket kodu
+  companyName?: string;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (user: User) => void;
-  logout: () => void;
+  loading: boolean;
+  login: (email: string, pass: string) => Promise<User>;  // User döndürür → Login.tsx yönlendirir
+  register: (data: RegisterData) => Promise<User>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-export const demoUsers: Record<string, User> = {
-  // Admin variants
-  admin_agriculture: {
-    id: 'adm-agr-1',
-    name: 'Ayşe Kaya',
-    email: 'ayse.kaya@egekooperatif.com',
-    role: 'admin',
-    industryType: 'agriculture',
-    companyName: 'Ege Kooperatifi',
-  },
-  admin_technology: {
-    id: 'adm-tec-1',
-    name: 'Berk Yılmaz',
-    email: 'berk.yilmaz@techstart.com',
-    role: 'admin',
-    industryType: 'technology',
-    companyName: 'TechStart İzmir A.Ş.',
-  },
-  admin_handcraft: {
-    id: 'adm-hnd-1',
-    name: 'Elif Güneş',
-    email: 'elif.gunes@kapadokya.com',
-    role: 'admin',
-    industryType: 'handcraft',
-    companyName: 'Kapadokya El Sanatları',
-  },
-  // Employee variants
-  employee_agriculture: {
-    id: 'emp-agr-1',
-    name: 'Mehmet Demir',
-    email: 'mehmet.demir@egekooperatif.com',
-    role: 'employee',
-    industryType: 'agriculture',
-    companyName: 'Ege Kooperatifi',
-  },
-  employee_technology: {
-    id: 'emp-tec-1',
-    name: 'Selin Çelik',
-    email: 'selin.celik@techstart.com',
-    role: 'employee',
-    industryType: 'technology',
-    companyName: 'TechStart İzmir A.Ş.',
-  },
-  employee_handcraft: {
-    id: 'emp-hnd-1',
-    name: 'Kadir Şahin',
-    email: 'kadir.sahin@kapadokya.com',
-    role: 'employee',
-    industryType: 'handcraft',
-    companyName: 'Kapadokya El Sanatları',
-  },
-  // Customer
-  customer_general: {
-    id: 'cus-gen-1',
-    name: 'Fatma Yıldız',
-    email: 'fatma.yildiz@gmail.com',
-    role: 'customer',
-    industryType: 'general',
-    companyName: '',
-  },
-  // SuperAdmin
-  superadmin: {
-    id: 'dev-001',
-    name: 'Platform Geliştirici',
-    email: 'dev@digico.io',
-    role: 'superadmin',
-    industryType: 'general',
-    companyName: 'DigiCo Platform',
-  },
-};
+// ── Demo kullanıcı e-postalarından industryType tahmini ──────────────────────
+function guessIndustryFromEmail(email: string): SMEType {
+  if (email.includes('tarim') || email.includes('agr')) return 'agriculture';
+  if (email.includes('tek') || email.includes('tech')) return 'technology';
+  if (email.includes('sanat') || email.includes('hand')) return 'handcraft';
+  return 'general';
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = (u: User) => setUser(u);
-  const logout = () => setUser(null);
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      try {
+        if (firebaseUser) {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setUser({
+              id: firebaseUser.uid,
+              name: data.name || '',
+              email: data.email || firebaseUser.email || '',
+              role: data.role || 'customer',
+              industryType: data.industryType || guessIndustryFromEmail(data.email || ''),
+              companyName: data.companyName || '',
+              companyId: data.companyId || '',
+            });
+          } else {
+            // Firestore'da kaydı yoksa (demo hesap vs.) kullanıcıyı null yap
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error('Auth state error:', err);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ── LOGIN ──────────────────────────────────────────────────────────────────
+  const login = async (email: string, pass: string): Promise<User> => {
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    const userDoc = await getDoc(doc(db, 'users', cred.user.uid));
+
+    if (!userDoc.exists()) {
+      await signOut(auth);
+      throw new Error('Kullanıcı kaydı bulunamadı. Lütfen önce kayıt olun.');
+    }
+
+    const data = userDoc.data();
+    const loggedUser: User = {
+      id: cred.user.uid,
+      name: data.name || '',
+      email: data.email || email,
+      role: data.role || 'customer',
+      industryType: data.industryType || guessIndustryFromEmail(email),
+      companyName: data.companyName || '',
+      companyId: data.companyId || '',
+    };
+    setUser(loggedUser);
+    return loggedUser;  // Login.tsx bu değeri alıp role'e göre yönlendirir
+  };
+
+  // ── REGISTER ──────────────────────────────────────────────────────────────
+  const register = async (formData: RegisterData): Promise<User> => {
+    const { email, password, name, role, industryType, companyName } = formData;
+    let assignedCompanyId = formData.companyId?.trim() || '';
+    let resolvedCompanyName = companyName?.trim() || '';
+    let resolvedIndustryType: SMEType = industryType || 'general';
+
+    // ── Yönetici: admin_invitations'da email kontrolü ──────────────────────
+    if (role === 'admin') {
+      const q = query(collection(db, 'admin_invitations'), where('email', '==', email.toLowerCase()));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        throw new Error('Bu e-posta adresi yönetici olarak yetkilendirilmemiştir.');
+      }
+      const inviteData = snap.docs[0].data();
+      assignedCompanyId = inviteData.authorizedCompanyId || assignedCompanyId;
+    }
+
+    // ── Çalışan: admin_invitations'da companyId kontrolü ──────────────────
+    if (role === 'employee') {
+      if (!assignedCompanyId) {
+        throw new Error('Lütfen şirket kodunu girin.');
+      }
+      const q = query(
+        collection(db, 'admin_invitations'),
+        where('authorizedCompanyId', '==', assignedCompanyId)
+      );
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        throw new Error('Geçersiz şirket kodu. Yöneticinizden doğru kodu alın.');
+      }
+      // Şirket koduna bağlı şirket bilgilerini çek (users koleksiyonundan admin bularak)
+      const adminQ = query(
+        collection(db, 'users'),
+        where('companyId', '==', assignedCompanyId),
+        where('role', '==', 'admin')
+      );
+      const adminSnap = await getDocs(adminQ);
+      if (!adminSnap.empty) {
+        const adminData = adminSnap.docs[0].data();
+        resolvedCompanyName = adminData.companyName || resolvedCompanyName;
+        resolvedIndustryType = adminData.industryType || resolvedIndustryType;
+      }
+    }
+
+    // ── Firebase Auth'a kayıt ──────────────────────────────────────────────
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const uid = cred.user.uid;
+
+    const userData = {
+      name,
+      email: email.toLowerCase(),
+      role,
+      industryType: resolvedIndustryType,
+      companyId: assignedCompanyId,
+      companyName: resolvedCompanyName,
+      createdAt: new Date().toISOString(),
+    };
+
+    await setDoc(doc(db, 'users', uid), userData);
+
+    const newUser: User = { id: uid, ...userData };
+    setUser(newUser);
+    return newUser;
+  };
+
+  // ── LOGOUT ────────────────────────────────────────────────────────────────
+  const logout = async () => {
+    await signOut(auth);
+    setUser(null);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
-      {children}
+    <AuthContext.Provider value={{ user, loading, login, register, logout, isAuthenticated: !!user }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }

@@ -13,7 +13,7 @@ const roleBadge: Record<string, { label: string; color: string }> = {
   customer: { label: 'Müşteri', color: 'bg-blue-100 text-blue-800' },
 };
 
-// DigiCo white-label platform
+// DigiCoBig white-label platform
 
 export function TopBar({ title }: Props) {
   const { isDark, toggleTheme } = useTheme();
