@@ -9,8 +9,13 @@ from google import genai
 from google.genai import types
 from firebase_config import db
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-GEMINI_MODEL = "gemini-2.0-flash"
+GEMINI_MODEL = "gemini-1.5-flash"
+
+def get_client():
+    key = os.getenv("VITE_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
+    return genai.Client(api_key=key)
+
+
 
 
 # ── ARAÇ FONKSİYONLARI ──────────────────────────────────────────────────────
@@ -129,18 +134,37 @@ async def get_stock_advice(company_id: str, mode: str = "advice") -> dict:
     while iteration < max_iterations:
         iteration += 1
 
-        try:
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    tools=[stock_tools],
-                    temperature=0.5,
+        import time
+        max_retries = 1
+        response = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                client = get_client()
+                response = client.models.generate_content(
+                    model=GEMINI_MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        tools=[stock_tools],
+                        temperature=0.5,
+                    )
                 )
-            )
-        except Exception as e:
-            return {"advice": f"Gemini hatasi: {str(e)[:200]}", "mode": mode}
+                break  # Basarili olursa donguden cik
+            except Exception as e:
+                is_429 = "429" in str(e)
+                if is_429 and attempt < max_retries:
+                    print(f"--- 429 ALINDI, 2 SANIYE BEKLENIYOR (Deneme {attempt+1}/{max_retries}) ---")
+                    time.sleep(2)
+                    continue
+                
+                if is_429:
+                    return {"advice": "Jüri yoğunluğu nedeniyle Gemini kotası anlık doldu, lütfen 10 saniye sonra tekrar sorun.", "mode": mode}
+                    
+                return {"advice": f"Gemini hatasi: {str(e)[:200]}", "mode": mode}
+                
+        if not response:
+             return {"advice": "Jüri yoğunluğu nedeniyle Gemini kotası anlık doldu, lütfen 10 saniye sonra tekrar sorun.", "mode": mode}
 
         # Gemini'nin cevabını ekle
         contents.append(types.Content(role="model", parts=response.candidates[0].content.parts))

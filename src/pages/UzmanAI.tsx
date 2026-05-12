@@ -5,7 +5,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSME, aiExpertPersonas } from '../contexts/SMEContext';
 import { useAuth } from '../contexts/AuthContext';
-import { GeminiTestButton } from '../components/GeminiTestButton'; // Gemini + Groq çift provider testi
+import ReactMarkdown from 'react-markdown';
 
 interface Msg {
   id: number;
@@ -141,8 +141,6 @@ export function UzmanAI() {
 
   return (
     <DashboardLayout title="Uzman AI">
-      {/* Geliştirme aşamasında Gemini bağlantısını doğrudan test etmek için */}
-      <GeminiTestButton />
       <div className="flex flex-col lg:flex-row gap-6 h-full" style={{ minHeight: 600 }}>
 
         {/* Sol panel: persona + hızlı sorular */}
@@ -243,7 +241,7 @@ export function UzmanAI() {
                       <Sparkles className="w-3.5 h-3.5 text-white" />
                     </div>
                   )}
-                  <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
+                  <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                     msg.role === 'ai'
                       ? isDark
                         ? 'bg-amber-900/30 text-amber-100 border border-amber-800/40'
@@ -252,7 +250,20 @@ export function UzmanAI() {
                         ? 'bg-slate-600 text-white'
                         : 'bg-slate-800 text-white'
                   }`}>
-                    {msg.content}
+                    {msg.role === 'ai' ? (
+                      <ReactMarkdown
+                        components={{
+                          strong: ({node, ...props}) => <strong className={`font-bold ${isDark ? 'text-white' : 'text-amber-950'}`} {...props} />,
+                          p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                          ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+                          li: ({node, ...props}) => <li {...props} />
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
+                    ) : (
+                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                    )}
                     <div className={`text-xs mt-2 ${msg.role === 'ai' ? 'text-amber-600/60' : 'text-white/40'}`}>
                       {msg.time}
                     </div>

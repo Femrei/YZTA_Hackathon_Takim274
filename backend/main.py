@@ -6,11 +6,13 @@ import os
 from dotenv import load_dotenv
 
 # .env dosyasını yükle (GEMINI_API_KEY buradan gelecek)
-load_dotenv()
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
+load_dotenv(dotenv_path=env_path, override=True)
 
 # Agent fonksiyonları
 from agents.chat_agent import chat_with_context
 from agents.stock_agent import get_stock_advice
+from agents.vision_agent import analyze_vision_image
 
 app = FastAPI(title="DigiCoBig AI Backend", version="1.0.0")
 
@@ -38,6 +40,10 @@ class ChatRequest(BaseModel):
 
 class CompanyRequest(BaseModel):
     company_id: str
+
+class VisionRequest(BaseModel):
+    company_id: str
+    image_base64: str
 
 
 # ─────────────────────────────────────────────
@@ -78,6 +84,21 @@ async def stock_advice(body: CompanyRequest):
 async def daily_summary(body: CompanyRequest):
     try:
         result = await get_stock_advice(body.company_id, mode="summary")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────
+# ENDPOINT 4: /ai/vision-analyze
+# Görüntü işleme - Hastalık ve kalite analizi
+# ─────────────────────────────────────────────
+@app.post("/ai/vision-analyze")
+async def vision_analyze(body: VisionRequest):
+    try:
+        result = await analyze_vision_image(body.company_id, body.image_base64)
+        if result["status"] == "error":
+            raise HTTPException(status_code=500, detail=result["message"])
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
