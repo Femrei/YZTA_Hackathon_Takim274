@@ -3,7 +3,7 @@ export type Language = 'tr' | 'en';
 export const translations: Record<Language, Record<string, string>> = {
   tr: {
     // App
-    appName: 'NexusAI',
+    appName: 'DigiCoBig',
     appTagline: 'KOBİ Operasyonel Otopilotu',
     systemOnline: 'Sistem Durumu: Çevrimiçi',
     backendConnected: 'Backend: Bağlı',
@@ -125,7 +125,7 @@ export const translations: Record<Language, Record<string, string>> = {
     language: 'Dil',
   },
   en: {
-    appName: 'NexusAI',
+    appName: 'DigiCoBig',
     appTagline: 'SME Operational Autopilot',
     systemOnline: 'System Status: Online',
     backendConnected: 'Backend: Connected',

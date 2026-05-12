@@ -3,8 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckSquare, Package, AlertCircle, CheckCircle2,
   Clock, Sparkles, Bell, Info,
-  AlertTriangle, Camera, Upload, Eye, Cpu,
+  AlertTriangle, Camera, Upload, Eye, Cpu, ShoppingCart,
 } from 'lucide-react';
+import {
+  collection, query, where, onSnapshot, orderBy,
+  doc, updateDoc, writeBatch,
+} from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { useAuth } from '../../contexts/AuthContext';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -15,6 +21,15 @@ import { useIndustry } from '../../contexts/IndustryContext';
 import { stockItems } from '../../data/mockData';
 
 type TaskStatus = 'pending' | 'in-progress' | 'done';
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'order' | 'warning' | 'info' | 'success';
+  read: boolean;
+  createdAt: { seconds: number } | null;
+}
 
 function VisionAISection() {
   const { isDark } = useTheme();
@@ -136,8 +151,11 @@ export function CalisanDashboard() {
   const { t } = useLanguage();
   const { isDark } = useTheme();
   const { data } = useIndustry();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [notifLoading, setNotifLoading] = useState(true);
   const [tasks, setTasks] = useState(data.employeeTasks.map(task => ({ ...task, taskStatus: task.status as TaskStatus })));
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [quantity, setQuantity] = useState('');
   const [note, setNote] = useState('');
@@ -147,6 +165,50 @@ export function CalisanDashboard() {
     const timer = setTimeout(() => setLoading(false), 1200);
     return () => clearTimeout(timer);
   }, []);
+
+  // Firestore'dan gerçek zamanlı bildirimler
+  useEffect(() => {
+    if (!user?.companyId) return;
+
+    const q = query(
+      collection(db, 'notifications'),
+      where('companyId', '==', user.companyId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const unsub = onSnapshot(q, (snap) => {
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));
+      // Çalışana ait: kişisel + role yönelik bildirimler
+      const mine = all.filter(n => {
+        const nd = n as Notification & { userId?: string | null; targetRole?: string };
+        return nd.userId === user.id || nd.targetRole === 'employee' || (!nd.userId && !nd.targetRole);
+      });
+      setNotifications(mine);
+      setNotifLoading(false);
+    });
+
+    return () => unsub();
+  }, [user?.companyId, user?.id]);
+
+  const markAllRead = async () => {
+    try {
+      const batch = writeBatch(db);
+      notifications.filter(n => !n.read).forEach(n => {
+        batch.update(doc(db, 'notifications', n.id), { read: true });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const markRead = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', id), { read: true });
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleTaskDone = (id: number) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, taskStatus: 'done' as TaskStatus } : t));
@@ -169,11 +231,32 @@ export function CalisanDashboard() {
     low: t('lowPriority'),
   };
 
-  const notifIcon = { success: CheckCircle2, warning: AlertTriangle, info: Info };
-  const notifColor = { success: 'text-emerald-500', warning: 'text-amber-500', info: 'text-blue-500' };
+  const notifIcon = {
+    order: ShoppingCart,
+    success: CheckCircle2,
+    warning: AlertTriangle,
+    info: Info,
+  };
+  const notifColor = {
+    order: 'text-blue-500',
+    success: 'text-emerald-500',
+    warning: 'text-amber-500',
+    info: 'text-blue-500',
+  };
+
+  const formatTime = (ts: { seconds: number } | null) => {
+    if (!ts) return '';
+    const d = new Date(ts.seconds * 1000);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'Az önce';
+    if (diff < 3600) return `${Math.floor(diff / 60)} dk önce`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} sa önce`;
+    return d.toLocaleDateString('tr-TR');
+  };
 
   const pendingTasks = tasks.filter(t => t.taskStatus !== 'done');
   const doneTasks = tasks.filter(t => t.taskStatus === 'done');
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
     <DashboardLayout title={t('tasks')}>
@@ -314,41 +397,66 @@ export function CalisanDashboard() {
             )}
           </Card>
 
-          {/* Vision AI */}
           <VisionAISection />
         </div>
 
-        {/* Notifications */}
+        {/* Notifications — Firestore'dan gerçek zamanlı */}
         <div>
           <Card>
             <div className="flex items-center gap-2 mb-4">
               <Bell className="w-5 h-5 text-slate-500" />
               <h2 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('internalNotifications')}</h2>
-              <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                {data.employeeNotifications.filter(n => !n.read).length} yeni
+              <span className="flex items-center gap-1 text-xs text-emerald-500 ml-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Canlı
               </span>
+              {unreadCount > 0 && (
+                <span
+                  onClick={markAllRead}
+                  className="ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 cursor-pointer hover:bg-red-200 transition-colors"
+                >
+                  {unreadCount} yeni
+                </span>
+              )}
             </div>
-            {loading ? <SkeletonLoader rows={4} /> : (
+            {notifLoading ? <SkeletonLoader rows={4} /> : (
               <div className="space-y-3">
-                {data.employeeNotifications.map((notif, idx) => {
-                  const Icon = notifIcon[notif.type];
-                  const color = notifColor[notif.type];
-                  return (
-                    <motion.div
-                      key={notif.id}
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: idx * 0.07 }}
-                      className={`flex gap-3 p-3 rounded-xl border ${!notif.read ? isDark ? 'border-slate-600 bg-slate-700/40' : 'border-slate-200 bg-white' : isDark ? 'border-slate-700/50 bg-slate-800/30 opacity-60' : 'border-slate-100 bg-slate-50/50 opacity-60'}`}
-                    >
-                      <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${color}`} />
-                      <div className="min-w-0">
-                        <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{notif.message}</p>
-                        <span className={`text-xs mt-1 block ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>{notif.time}</span>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                {notifications.length === 0 ? (
+                  <p className={`text-xs text-center py-4 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Henüz bildirim yok.
+                  </p>
+                ) : (
+                  notifications.slice(0, 8).map((notif, idx) => {
+                    const Icon = notifIcon[notif.type] || Info;
+                    const color = notifColor[notif.type] || 'text-blue-500';
+                    return (
+                      <motion.div
+                        key={notif.id}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.07 }}
+                        onClick={() => !notif.read && markRead(notif.id)}
+                        className={`flex gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                          !notif.read
+                            ? isDark ? 'border-slate-600 bg-slate-700/40 hover:bg-slate-700/60' : 'border-slate-200 bg-white hover:bg-slate-50'
+                            : isDark ? 'border-slate-700/50 bg-slate-800/30 opacity-60' : 'border-slate-100 bg-slate-50/50 opacity-60'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 mt-0.5 flex-shrink-0 ${color}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className={`text-xs font-medium ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{notif.title}</p>
+                          <p className={`text-xs leading-relaxed mt-0.5 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{notif.message}</p>
+                          <span className={`text-xs mt-1 block ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                            {formatTime(notif.createdAt)}
+                          </span>
+                        </div>
+                        {!notif.read && (
+                          <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1" />
+                        )}
+                      </motion.div>
+                    );
+                  })
+                )}
               </div>
             )}
           </Card>

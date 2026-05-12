@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Send, BrainCircuit, RefreshCw } from 'lucide-react';
+import { Sparkles, Send, BrainCircuit, RefreshCw, WifiOff } from 'lucide-react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSME, aiExpertPersonas } from '../contexts/SMEContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Msg {
   id: number;
@@ -11,6 +12,9 @@ interface Msg {
   content: string;
   time: string;
 }
+
+// Backend URL — .env dosyanda VITE_API_URL yoksa localhost kullanır
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
 
 const quickPrompts: Record<string, string[]> = {
   agriculture: [
@@ -42,54 +46,103 @@ const quickPrompts: Record<string, string[]> = {
 export function UzmanAI() {
   const { isDark } = useTheme();
   const { smeType } = useSME();
-  const persona = aiExpertPersonas[smeType];
-  const prompts = quickPrompts[smeType];
+  const { user } = useAuth();
+  const persona  = aiExpertPersonas[smeType];
+  const prompts  = quickPrompts[smeType] ?? quickPrompts['general'];
 
   const [messages, setMessages] = useState<Msg[]>([
     { id: 0, role: 'ai', content: persona.greeting, time: 'Şimdi' },
   ]);
-  const [input, setInput] = useState('');
+  const [input, setInput]       = useState('');
   const [thinking, setThinking] = useState(false);
-  const responseIdx = useRef(0);
+  const [backendOk, setBackendOk] = useState<boolean | null>(null); // null=bilinmiyor
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Persona değişince sohbeti sıfırla
   useEffect(() => {
     setMessages([{ id: 0, role: 'ai', content: persona.greeting, time: 'Şimdi' }]);
-    responseIdx.current = 0;
   }, [smeType, persona.greeting]);
 
+  // Scroll to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking]);
 
-  const send = (text?: string) => {
+  // Backend sağlık kontrolü (sadece bir kere)
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/health`)
+      .then(r => setBackendOk(r.ok))
+      .catch(() => setBackendOk(false));
+  }, []);
+
+  const now = () =>
+    new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+
+  const send = async (text?: string) => {
     const content = (text ?? input).trim();
-    if (!content) return;
-    const now = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    setMessages(p => [...p, { id: Date.now(), role: 'user', content, time: now }]);
+    if (!content || thinking) return;
+
+    const userMsg: Msg = { id: Date.now(), role: 'user', content, time: now() };
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
     setThinking(true);
-    setTimeout(() => {
+
+    // Gemini'ye gönderilecek mesaj geçmişini hazırla
+    // (AI mesajlarını "assistant" olarak gönderiyoruz, backend "model"e çeviriyor)
+    const history = [
+      ...messages.filter(m => m.id !== 0).map(m => ({
+        role: m.role === 'ai' ? 'assistant' : 'user',
+        content: m.content,
+      })),
+      { role: 'user', content },
+    ];
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/ai/chat`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: user?.companyId ?? 'demo',
+          messages:   history,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+      setMessages(prev => [
+        ...prev,
+        { id: Date.now() + 1, role: 'ai', content: data.reply, time: now() },
+      ]);
+      setBackendOk(true);
+
+    } catch (err) {
+      console.error('Backend bağlantı hatası:', err);
+      setBackendOk(false);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: 'ai',
+          content: 'Backend sunucusuna bağlanamadım. "cd backend && uvicorn main:app --reload" komutunu çalıştırdığından emin ol.',
+          time: now(),
+        },
+      ]);
+    } finally {
       setThinking(false);
-      const resp = persona.responses[responseIdx.current % persona.responses.length];
-      responseIdx.current++;
-      setMessages(p => [...p, {
-        id: Date.now() + 1, role: 'ai', content: resp,
-        time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-      }]);
-    }, 1600);
+    }
   };
 
   const reset = () => {
     setMessages([{ id: 0, role: 'ai', content: persona.greeting, time: 'Şimdi' }]);
-    responseIdx.current = 0;
     setInput('');
   };
 
   return (
     <DashboardLayout title="Uzman AI">
       <div className="flex flex-col lg:flex-row gap-6 h-full" style={{ minHeight: 600 }}>
-        {/* Sidebar: persona + quick prompts */}
+
+        {/* Sol panel: persona + hızlı sorular */}
         <div className="lg:w-72 flex-shrink-0 space-y-4">
           <div className={`rounded-2xl border p-5 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
             <div className="flex items-center gap-3 mb-4">
@@ -99,13 +152,24 @@ export function UzmanAI() {
               <div>
                 <div className={`font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>{persona.title}</div>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-xs text-emerald-600 font-medium">Çevrimiçi</span>
+                  {backendOk === false ? (
+                    <>
+                      <WifiOff className="w-3 h-3 text-red-500" />
+                      <span className="text-xs text-red-500 font-medium">Backend kapalı</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-xs text-emerald-600 font-medium">
+                        {backendOk === null ? 'Bağlanıyor...' : 'Gemini AI · Canlı'}
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
             <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-              Sektörünüze özel eğitilmiş AI danışmanınız. Stratejik sorular, operasyonel tavsiyeler ve iş büyütme konularında destek verir.
+              Sektörünüze özel Gemini AI danışmanınız. Firestore'daki gerçek stok ve sipariş verilerinizle çalışır.
             </p>
           </div>
 
@@ -135,7 +199,9 @@ export function UzmanAI() {
           <button
             onClick={reset}
             className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-              isDark ? 'border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+              isDark
+                ? 'border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white'
+                : 'border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700'
             }`}
           >
             <RefreshCw className="w-4 h-4" />
@@ -143,20 +209,22 @@ export function UzmanAI() {
           </button>
         </div>
 
-        {/* Chat area */}
+        {/* Sağ panel: sohbet */}
         <div className={`flex-1 flex flex-col rounded-2xl border overflow-hidden ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-          {/* Header */}
+          {/* Başlık */}
           <div className={`px-5 py-4 border-b flex items-center gap-3 ${isDark ? 'border-slate-700' : 'border-slate-100'}`}>
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
               <div className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>{persona.title}</div>
-              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{messages.length - 1} mesaj</div>
+              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                {messages.length - 1} mesaj · Gemini 2.0 Flash
+              </div>
             </div>
           </div>
 
-          {/* Messages */}
+          {/* Mesajlar */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4" style={{ maxHeight: 480 }}>
             <AnimatePresence initial={false}>
               {messages.map(msg => (
@@ -172,13 +240,19 @@ export function UzmanAI() {
                       <Sparkles className="w-3.5 h-3.5 text-white" />
                     </div>
                   )}
-                  <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                  <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
                     msg.role === 'ai'
-                      ? isDark ? 'bg-amber-900/30 text-amber-100 border border-amber-800/40' : 'bg-amber-50 text-amber-900 border border-amber-100'
-                      : isDark ? 'bg-slate-600 text-white' : 'bg-slate-800 text-white'
+                      ? isDark
+                        ? 'bg-amber-900/30 text-amber-100 border border-amber-800/40'
+                        : 'bg-amber-50 text-amber-900 border border-amber-100'
+                      : isDark
+                        ? 'bg-slate-600 text-white'
+                        : 'bg-slate-800 text-white'
                   }`}>
                     {msg.content}
-                    <div className={`text-xs mt-2 ${msg.role === 'ai' ? 'text-amber-600/60' : 'text-white/40'}`}>{msg.time}</div>
+                    <div className={`text-xs mt-2 ${msg.role === 'ai' ? 'text-amber-600/60' : 'text-white/40'}`}>
+                      {msg.time}
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -190,12 +264,14 @@ export function UzmanAI() {
                   <Sparkles className="w-3.5 h-3.5 text-white" />
                 </div>
                 <div className={`rounded-2xl px-4 py-3 flex items-center gap-1.5 text-sm ${
-                  isDark ? 'bg-amber-900/30 text-amber-300 border border-amber-800/40' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                  isDark
+                    ? 'bg-amber-900/30 text-amber-300 border border-amber-800/40'
+                    : 'bg-amber-50 text-amber-700 border border-amber-100'
                 }`}>
                   {[0, 0.2, 0.4].map((delay, i) => (
                     <motion.span key={i} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1.2, repeat: Infinity, delay }}>●</motion.span>
                   ))}
-                  <span className="ml-1">AI Düşünüyor...</span>
+                  <span className="ml-1">Gemini düşünüyor...</span>
                 </div>
               </motion.div>
             )}
@@ -213,7 +289,9 @@ export function UzmanAI() {
                 placeholder="Uzmana bir soru sorun..."
                 disabled={thinking}
                 className={`flex-1 text-sm px-4 py-2.5 rounded-xl outline-none transition-all disabled:opacity-50 ${
-                  isDark ? 'bg-slate-700 text-white placeholder-slate-500' : 'bg-slate-50 text-slate-800 placeholder-slate-400 border border-slate-200'
+                  isDark
+                    ? 'bg-slate-700 text-white placeholder-slate-500'
+                    : 'bg-slate-50 text-slate-800 placeholder-slate-400 border border-slate-200'
                 }`}
               />
               <motion.button

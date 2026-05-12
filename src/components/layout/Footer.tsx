@@ -23,7 +23,7 @@ export function Footer() {
           {t('aiEngineActive')}
         </span>
       </div>
-      <span>© 2026 NexusAI · v2.4.1</span>
+      <span>© 2026 DigiCoBig · v1.0.0</span>
     </footer>
   );
 }
