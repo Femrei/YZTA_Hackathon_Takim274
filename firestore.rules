@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Yardımcı fonksiyonlar ─────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && userDoc().role == role;
+    }
+
+    function belongsToCompany(companyId) {
+      return isSignedIn() && userDoc().companyId == companyId;
+    }
+
+    // ── users koleksiyonu ─────────────────────────────────────────────────────
+    // Kullanıcı yalnızca kendi dökümanını okuyabilir/yazabilir.
+    // list yetkisi çalışan kaydı (companyId sorgusu) için gerekli.
+    match /users/{userId} {
+      allow read:   if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId;
+      allow delete: if false;
+      // Çalışan kaydında admin aranması için (companyId where sorgusu)
+      allow list:   if isSignedIn();
+    }
+
+    // ── admin_invitations koleksiyonu ──────────────────────────────────────────
+    // Herkes okuyabilir (kayıt sırasında kullanıcı henüz auth olmayabilir).
+    // Sadece Firebase Console/Admin SDK yazabilir.
+    match /admin_invitations/{docId} {
+      allow read:  if true;   // HACKATHON: açık — PROD'da: if isSignedIn()
+      allow write: if false;
+    }
+
+    // ── products koleksiyonu ──────────────────────────────────────────────────
+    // Admin ve çalışan: kendi şirketinin ürünlerini okuyabilir.
+    // Admin: yazabilir. Çalışan: sadece stok güncelleyebilir (update).
+    // Müşteri: erişemez.
+    match /products/{productId} {
+      allow read: if isSignedIn() &&
+                     (hasRole('admin') || hasRole('employee') || hasRole('superadmin')) &&
+                     belongsToCompany(resource.data.companyId);
+
+      allow create: if hasRole('admin') && belongsToCompany(request.resource.data.companyId);
+      allow update: if (hasRole('admin') || hasRole('employee')) &&
+                       belongsToCompany(resource.data.companyId);
+      allow delete: if hasRole('admin') && belongsToCompany(resource.data.companyId);
+
+      // list sorgusu (where companyId == ...) için genel okuma izni — kendi şirketi
+      allow list: if isSignedIn() &&
+                     (hasRole('admin') || hasRole('employee') || hasRole('superadmin'));
+    }
+
+    // ── orders koleksiyonu ────────────────────────────────────────────────────
+    // Admin ve çalışan: kendi şirketinin siparişlerini görebilir.
+    // Müşteri: kendi siparişlerini görebilir (customerId field ile ileride genişletilebilir).
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && belongsToCompany(resource.data.companyId);
+      allow create: if isSignedIn() && belongsToCompany(request.resource.data.companyId);
+      allow update: if (hasRole('admin') || hasRole('employee')) &&
+                       belongsToCompany(resource.data.companyId);
+      allow delete: if hasRole('admin') && belongsToCompany(resource.data.companyId);
+      allow list:   if isSignedIn();
+    }
+
+    // ── notifications koleksiyonu ─────────────────────────────────────────────
+    // Kendi şirketinin bildirimlerini okuyabilir. Sadece sistem (admin) yazabilir.
+    match /notifications/{notifId} {
+      allow read:   if isSignedIn() && belongsToCompany(resource.data.companyId);
+      allow create: if hasRole('admin') || hasRole('superadmin');
+      allow update: if isSignedIn() && belongsToCompany(resource.data.companyId); // okundu işareti
+      allow delete: if hasRole('admin');
+      allow list:   if isSignedIn();
+    }
+
+    // ── Diğer koleksiyonlar ────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

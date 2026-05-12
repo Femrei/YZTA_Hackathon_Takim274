@@ -5,6 +5,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSME, aiExpertPersonas } from '../contexts/SMEContext';
 import { useAuth } from '../contexts/AuthContext';
+import { GeminiTestButton } from '../components/GeminiTestButton'; // Gemini + Groq çift provider testi
 
 interface Msg {
   id: number;
@@ -13,8 +14,8 @@ interface Msg {
   time: string;
 }
 
-// Backend URL — .env dosyanda VITE_API_URL yoksa localhost kullanır
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000';
+// Backend URL — .env dosyandaki VITE_API_URL kullanılır (VITE_BACKEND_URL değil!)
+const BACKEND_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 const quickPrompts: Record<string, string[]> = {
   agriculture: [
@@ -140,6 +141,8 @@ export function UzmanAI() {
 
   return (
     <DashboardLayout title="Uzman AI">
+      {/* Geliştirme aşamasında Gemini bağlantısını doğrudan test etmek için */}
+      <GeminiTestButton />
       <div className="flex flex-col lg:flex-row gap-6 h-full" style={{ minHeight: 600 }}>
 
         {/* Sol panel: persona + hızlı sorular */}
