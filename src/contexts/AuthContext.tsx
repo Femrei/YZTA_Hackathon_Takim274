@@ -112,71 +112,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return loggedUser;  // Login.tsx bu değeri alıp role'e göre yönlendirir
   };
 
-  // ── REGISTER ──────────────────────────────────────────────────────────────
-  const register = async (formData: RegisterData): Promise<User> => {
-    const { email, password, name, role, industryType, companyName } = formData;
-    let assignedCompanyId = formData.companyId?.trim() || '';
-    let resolvedCompanyName = companyName?.trim() || '';
-    let resolvedIndustryType: SMEType = industryType || 'general';
+// ── REGISTER ──────────────────────────────────────────────────────────────
+const register = async (formData: RegisterData): Promise<User> => {
+  const { email, password, name, role, industryType, companyName } = formData;
+  let assignedCompanyId = formData.companyId?.trim() || '';
+  let resolvedCompanyName = companyName?.trim() || '';
+  let resolvedIndustryType: SMEType = industryType || 'general';
 
-    // ── Yönetici: admin_invitations'da email kontrolü ──────────────────────
-    if (role === 'admin') {
-      const q = query(collection(db, 'admin_invitations'), where('email', '==', email.toLowerCase()));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        throw new Error('Bu e-posta adresi yönetici olarak yetkilendirilmemiştir.');
-      }
-      const inviteData = snap.docs[0].data();
-      assignedCompanyId = inviteData.authorizedCompanyId || assignedCompanyId;
+  // ── Yönetici: admin_invitations'da email kontrolü ──────────────────────
+  if (role === 'admin') {
+    const q = query(collection(db, 'admin_invitations'), where('email', '==', email.toLowerCase()));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      throw new Error('Bu e-posta adresi yönetici olarak yetkilendirilmemiştir.');
     }
+    const inviteData = snap.docs[0].data();
+    assignedCompanyId = inviteData.authorizedCompanyId || assignedCompanyId;
+  }
 
-    // ── Çalışan: admin_invitations'da companyId kontrolü ──────────────────
-    if (role === 'employee') {
-      if (!assignedCompanyId) {
-        throw new Error('Lütfen şirket kodunu girin.');
-      }
-      const q = query(
-        collection(db, 'admin_invitations'),
-        where('authorizedCompanyId', '==', assignedCompanyId)
-      );
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        throw new Error('Geçersiz şirket kodu. Yöneticinizden doğru kodu alın.');
-      }
-      // Şirket koduna bağlı şirket bilgilerini çek (users koleksiyonundan admin bularak)
-      const adminQ = query(
-        collection(db, 'users'),
-        where('companyId', '==', assignedCompanyId),
-        where('role', '==', 'admin')
-      );
-      const adminSnap = await getDocs(adminQ);
-      if (!adminSnap.empty) {
-        const adminData = adminSnap.docs[0].data();
-        resolvedCompanyName = adminData.companyName || resolvedCompanyName;
-        resolvedIndustryType = adminData.industryType || resolvedIndustryType;
-      }
+  // ── Çalışan: girilen şirket kodu geçerli mi kontrol et ──────────────────
+  if (role === 'employee') {
+    if (!assignedCompanyId) {
+      throw new Error('Lütfen şirket kodunu girin.');
     }
+    // O companyId'ye sahip bir admin var mı bak
+    const adminQ = query(
+      collection(db, 'users'),
+      where('companyId', '==', assignedCompanyId),
+      where('role', '==', 'admin')
+    );
+    const adminSnap = await getDocs(adminQ);
+    if (adminSnap.empty) {
+      throw new Error('Geçersiz şirket kodu. Yöneticinizden doğru kodu alın.');
+    }
+    const adminData = adminSnap.docs[0].data();
+    resolvedCompanyName = adminData.companyName || resolvedCompanyName;
+    resolvedIndustryType = adminData.industryType || resolvedIndustryType;
+  }
 
-    // ── Firebase Auth'a kayıt ──────────────────────────────────────────────
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const uid = cred.user.uid;
+  // ── Firebase Auth'a kayıt ──────────────────────────────────────────────
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  const uid = cred.user.uid;
 
-    const userData = {
-      name,
-      email: email.toLowerCase(),
-      role,
-      industryType: resolvedIndustryType,
-      companyId: assignedCompanyId,
-      companyName: resolvedCompanyName,
-      createdAt: new Date().toISOString(),
-    };
-
-    await setDoc(doc(db, 'users', uid), userData);
-
-    const newUser: User = { id: uid, ...userData };
-    setUser(newUser);
-    return newUser;
+  const userData = {
+    name,
+    email: email.toLowerCase(),
+    role,
+    industryType: resolvedIndustryType,
+    companyId: assignedCompanyId,
+    companyName: resolvedCompanyName,
+    createdAt: new Date().toISOString(),
   };
+
+  await setDoc(doc(db, 'users', uid), userData);
+
+  // Kayıt sonrası oturumu kapat → kullanıcı login sayfasına dönüp giriş yapacak
+  await signOut(auth);
+  setUser(null);
+
+  // Login.tsx bu değeri alıp "Kayıt başarılı, giriş yapın" mesajı gösterecek
+  const newUser: User = { id: uid, ...userData };
+  return newUser;
+};
 
   // ── LOGOUT ────────────────────────────────────────────────────────────────
   const logout = async () => {

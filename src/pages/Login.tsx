@@ -96,21 +96,25 @@ export function Login() {
         navigate(roleRoutes[loggedUser.role]);   // ← role'e göre yönlendir
 
       } else {
-        // ── Kayıt validasyonu ──────────────────────────────────────────────
+        // ── Kayıt validasyonu ────────────────────────────────────────────────
         if (!email || !password || !fullName) {
-          addToast('Lütfen tüm zorunlu alanları doldurun.', 'error'); return;
+          addToast('Lütfen tüm zorunlu alanları doldurun.', 'error');
+          return;
         }
         if (password.length < 6) {
-          addToast('Şifre en az 6 karakter olmalıdır.', 'error'); return;
+          addToast('Şifre en az 6 karakter olmalıdır.', 'error');
+          return;
         }
         if (registerRole === 'employee' && !businessCode.trim()) {
-          addToast('Çalışan kaydı için şirket kodu zorunludur.', 'error'); return;
+          addToast('Çalışan kaydı için şirket kodu zorunludur.', 'error');
+          return;
         }
         if (registerRole === 'admin' && !companyName.trim()) {
-          addToast('Şirket adı zorunludur.', 'error'); return;
+          addToast('Şirket adı zorunludur.', 'error');
+          return;
         }
 
-        const newUser = await register({
+        await register({
           email,
           password,
           name: fullName,
@@ -120,8 +124,14 @@ export function Login() {
           companyName: registerRole === 'admin' ? companyName.trim() : undefined,
         });
 
-        addToast('Kayıt başarılı! Yönlendiriliyorsunuz...', 'success');
-        navigate(roleRoutes[newUser.role]);
+        // Kayıt başarılı → formu temizle → login ekranına geç
+        addToast('Kayıt başarılı! Şimdi giriş yapabilirsiniz.', 'success');
+        setEmail('');
+        setPassword('');
+        setFullName('');
+        setCompanyName('');
+        setBusinessCode('');
+        setAuthMode('login');   // ← login ekranına döner, navigate() yok
       }
     } catch (err: any) {
       // Firebase hata kodlarını Türkçeye çevir

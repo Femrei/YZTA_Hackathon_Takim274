@@ -398,7 +398,7 @@ export const chatMessages = [
   {
     id: 1,
     role: 'ai' as const,
-    content: 'Merhaba Fatma Hanım! Ben NexusAI asistanınızım. Siparişleriniz, ürünlerimiz veya herhangi bir konuda size nasıl yardımcı olabilirim?',
+    content: 'Merhaba Fatma Hanım! Ben DigiCoBig asistanınızım. Siparişleriniz, ürünlerimiz veya herhangi bir konuda size nasıl yardımcı olabilirim?',
     time: '09:00',
   },
 ];
