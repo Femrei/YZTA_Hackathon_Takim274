@@ -9,7 +9,7 @@ from google import genai
 from google.genai import types
 from firebase_config import db
 
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = "gemini-flash-lite-latest"
 
 def get_client():
     key = os.getenv("VITE_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -104,101 +104,59 @@ def run_tool(tool_name: str, tool_args: dict) -> str:
 # ── ANA AGENT FONKSİYONU ─────────────────────────────────────────────────────
 
 async def get_stock_advice(company_id: str, mode: str = "advice") -> dict:
+    stock_data = get_stock_levels(company_id)
+    orders_data = get_pending_orders(company_id)
+    
+    data_context = f"STOK VERİLERİ:\n{json.dumps(stock_data, ensure_ascii=False)}\n\nBEKLEYEN SİPARİŞLER:\n{json.dumps(orders_data, ensure_ascii=False)}"
+
     if mode == "summary":
         user_prompt = (
             f"Sirket ID: {company_id}\n"
-            "Araclari kullanarak stok ve siparis verilerini cek, "
-            "sonra 3-4 cumlelik Turkce gunluk ozet yaz. "
-            "Kritik urunleri ve bekleyen siparis sayisini mutlaka belirt."
+            f"{data_context}\n\n"
+            "Yonetici paneli icin tam olarak 3 adet 'Stratejik Ongoru' uret.\n"
+            "Her bir ongoru su formatta olmali: 'BASLIK | ICERIK | TREND'\n"
+            "Trend degeri sadece 'positive', 'neutral' veya 'negative' olabilir.\n"
+            "Ornek:\n"
+            "Hasat Tahmini | Bu yil verim %18 daha yuksek, paketleme kapasitesini artirin. | positive\n"
+            "Lutfen sadece bu formatta 3 satir dondur, baska aciklama ekleme."
         )
     else:
         user_prompt = (
             f"Sirket ID: {company_id}\n"
-            "Araclari kullanarak stok seviyelerini ve bekleyen siparisleri cek. "
-            "Hangi urunler icin acil siparis verilmeli? "
+            f"{data_context}\n\n"
+            "Yukaridaki verilere dayanarak, hangi urunler icin acil siparis verilmeli? "
             "Fazla stok olan urunler var mi? "
             "Turkce, madde madde pratik oneriler yaz."
         )
 
     system_instruction = (
         "Sen bir KOBİ stok yonetimi uzmanisın. "
-        "Once araclari kullanarak guncel veriyi cek, sonra analiz et. "
+        "Sana verilen guncel verileri analiz et. "
         "Cevaplarini Turkce ve pratik tut."
     )
 
-    contents = [types.Content(role="user", parts=[types.Part(text=user_prompt)])]
-
-    max_iterations = 5
-    iteration = 0
-
-    while iteration < max_iterations:
-        iteration += 1
-
-        import time
-        max_retries = 1
-        response = None
-        
-        for attempt in range(max_retries + 1):
-            try:
-                client = get_client()
-                response = client.models.generate_content(
-                    model=GEMINI_MODEL,
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_instruction,
-                        tools=[stock_tools],
-                        temperature=0.5,
-                    )
-                )
-                break  # Basarili olursa donguden cik
-            except Exception as e:
-                is_429 = "429" in str(e)
-                if is_429 and attempt < max_retries:
-                    print(f"--- 429 ALINDI, 2 SANIYE BEKLENIYOR (Deneme {attempt+1}/{max_retries}) ---")
-                    time.sleep(2)
-                    continue
-                
-                if is_429:
-                    return {"advice": "Jüri yoğunluğu nedeniyle Gemini kotası anlık doldu, lütfen 10 saniye sonra tekrar sorun.", "mode": mode}
-                    
-                return {"advice": f"Gemini hatasi: {str(e)[:200]}", "mode": mode}
-                
-        if not response:
-             return {"advice": "Jüri yoğunluğu nedeniyle Gemini kotası anlık doldu, lütfen 10 saniye sonra tekrar sorun.", "mode": mode}
-
-        # Gemini'nin cevabını ekle
-        contents.append(types.Content(role="model", parts=response.candidates[0].content.parts))
-
-        # Tool call var mı kontrol et
-        tool_calls = [
-            part for part in response.candidates[0].content.parts
-            if part.function_call is not None
-        ]
-
-        if not tool_calls:
-            # Son metin cevabını al
-            final_text = ""
-            for part in response.candidates[0].content.parts:
-                if hasattr(part, "text") and part.text:
-                    final_text += part.text
-            if final_text.strip():
-                return {"advice": final_text.strip(), "mode": mode}
-            return {"advice": "Analiz tamamlandi fakat cevap alinamadi.", "mode": mode}
-
-        # Araçları çalıştır ve sonuçları gönder
-        tool_result_parts = []
-        for part in tool_calls:
-            fc = part.function_call
-            result_json = run_tool(fc.name, dict(fc.args))
-            tool_result_parts.append(
-                types.Part(
-                    function_response=types.FunctionResponse(
-                        name=fc.name,
-                        response={"result": result_json}
-                    )
+    import time
+    max_retries = 1
+    
+    for attempt in range(max_retries + 1):
+        try:
+            client = get_client()
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[user_prompt],
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.4,
                 )
             )
+            return {"advice": response.text.strip() if response.text else "Sonuç alınamadı.", "mode": mode}
+        except Exception as e:
+            is_429 = "429" in str(e)
+            if is_429 and attempt < max_retries:
+                time.sleep(2)
+                continue
+            if is_429:
+                return {"advice": "Jüri yoğunluğu nedeniyle Gemini kotası anlık doldu, lütfen 10 saniye sonra tekrar sorun.", "mode": mode}
+            return {"advice": f"Gemini hatasi: {str(e)[:200]}", "mode": mode}
 
-        contents.append(types.Content(role="user", parts=tool_result_parts))
-
-    return {"advice": "Analiz zaman asimina ugradi. Lutfen tekrar deneyin.", "mode": mode}
+    return {"advice": "Analiz tamamlanamadi.", "mode": mode}

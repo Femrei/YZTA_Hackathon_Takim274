@@ -49,6 +49,7 @@ class VisionRequest(BaseModel):
 class InvoiceRequest(BaseModel):
     company_id: str
     image_base64: str
+    question: str = None
 
 
 
@@ -103,7 +104,7 @@ async def vision_analyze(body: VisionRequest):
 @app.post("/ai/invoice-analyze")
 async def invoice_analyze(body: InvoiceRequest):
     try:
-        result = await analyze_invoice(body.company_id, body.image_base64)
+        result = await analyze_invoice(body.company_id, body.image_base64, body.question)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))    

@@ -164,14 +164,22 @@ export function AdminDashboard() {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [actions, setActions] = useState<{ id: number; title: string; description: string; priority: string }[]>([]);
+  const [actions, setActions] = useState<{ id: number; title: string; description: string; priority: string }[]>(() => {
+    const cached = sessionStorage.getItem('cached_ai_actions');
+    return cached ? JSON.parse(cached) : [];
+  });
   const [approvedIds, setApprovedIds] = useState<number[]>([]);
-  const [aiAdviceLoading, setAiAdviceLoading] = useState(false);
+  const [aiAdviceLoading, setAiAdviceLoading] = useState(() => !sessionStorage.getItem('cached_ai_actions'));
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [employees, setEmployees] = useState<FSEmployee[]>([]);
   const [orders, setOrders] = useState<FSOrder[]>([]);
   const [products, setProducts] = useState<FSProduct[]>([]);
   const [notifications, setNotifications] = useState<FSNotif[]>([]);
+  const [realInsights, setRealInsights] = useState<{ titleKey: string; title: string; insight: string; trend: 'positive' | 'neutral' | 'negative' }[]>(() => {
+    const cached = sessionStorage.getItem('cached_real_insights');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [insightsLoading, setInsightsLoading] = useState(() => !sessionStorage.getItem('cached_real_insights'));
 
   useEffect(() => {
     if (!user?.companyId) return;
@@ -202,7 +210,7 @@ export function AdminDashboard() {
 
   const fetchAiAdvice = async () => {
     if (!user?.companyId) return;
-    setAiAdviceLoading(true);
+    if (actions.length === 0) setAiAdviceLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/ai/stock-advice`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -213,12 +221,55 @@ export function AdminDashboard() {
       const d = await res.json();
       const lines = (d.advice as string).split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 10);
       const parsed = lines.slice(0, 4).map((line: string, i: number) => ({ id: Date.now() + i, title: `AI Öneri #${i + 1}`, description: line.replace(/^[-*•\d.]+\s*/, ''), priority: i === 0 ? 'high' : 'normal' }));
-      setActions(parsed.length > 0 ? parsed : MOCK_AI_ACTIONS);
-    } catch { setActions(MOCK_AI_ACTIONS); }
+      const finalActions = parsed.length > 0 ? parsed : MOCK_AI_ACTIONS;
+      setActions(finalActions);
+      sessionStorage.setItem('cached_ai_actions', JSON.stringify(finalActions));
+    } catch { 
+      setActions(MOCK_AI_ACTIONS);
+      sessionStorage.setItem('cached_ai_actions', JSON.stringify(MOCK_AI_ACTIONS));
+    }
     finally { setAiAdviceLoading(false); }
   };
 
-  useEffect(() => { if (user?.companyId) fetchAiAdvice(); }, [user?.companyId]);
+  const fetchRealInsights = async () => {
+    if (!user?.companyId) return;
+    if (realInsights.length === 0) setInsightsLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/ai/daily-summary`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: user.companyId }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      const lines = (d.advice as string).split('\n').map((l: string) => l.trim()).filter((l: string) => l.includes('|'));
+      const parsed = lines.map((line, i) => {
+        const parts = line.split('|').map(p => p.trim());
+        const trendRaw = parts[2]?.toLowerCase() || 'neutral';
+        const trend = (['positive', 'negative', 'neutral'].includes(trendRaw)) ? trendRaw : 'neutral';
+        return {
+          titleKey: `real-insight-${i}`,
+          title: parts[0] || 'AI Öngörüsü',
+          insight: parts[1] || 'Veri okunamadı',
+          trend: trend as 'positive' | 'neutral' | 'negative'
+        };
+      }).slice(0, 3);
+      if (parsed.length > 0) {
+        setRealInsights(parsed);
+        sessionStorage.setItem('cached_real_insights', JSON.stringify(parsed));
+      }
+    } catch (e) {
+      console.error("AI Insights Error:", e);
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    if (user?.companyId) {
+      fetchAiAdvice();
+      fetchRealInsights();
+    }
+  }, [user?.companyId]);
 
   const handleApprove = (id: number) => {
     setApprovedIds(prev => [...prev, id]);
@@ -280,9 +331,9 @@ export function AdminDashboard() {
         {/* AI Insights */}
         <Card>
           <div className="flex items-center gap-2 mb-4"><Sparkles className="w-5 h-5 text-amber-500" /><h2 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('aiInsights')}</h2></div>
-          {loading ? <SkeletonLoader rows={3} /> : (
+          {(loading || insightsLoading) ? <SkeletonLoader rows={3} /> : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {data.aiInsights.map(insight => {
+              {(realInsights.length > 0 ? realInsights : data.aiInsights).map(insight => {
                 const trendColors = { positive: { card: 'from-emerald-500/10 to-teal-500/10 border-emerald-200', icon: 'text-emerald-600 bg-emerald-100' }, neutral: { card: 'from-blue-500/10 to-slate-500/10 border-blue-200', icon: 'text-blue-600 bg-blue-100' }, negative: { card: 'from-red-500/10 to-orange-500/10 border-red-200', icon: 'text-red-600 bg-red-100' } };
                 const colors = trendColors[insight.trend];
                 return (

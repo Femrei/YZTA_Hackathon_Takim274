@@ -145,6 +145,7 @@ function BelgePanel({ isDark, user }: { isDark: boolean; user: any }) {
   const [file, setFile] = useState<string | null>(null);
   const [drag, setDrag] = useState(false);
   const [state, setState] = useState<AnalysisState>(EMPTY);
+  const [question, setQuestion] = useState("");
 
   const handleFile = async (f: File) => {
     const b64 = await fileToBase64(f);
@@ -162,6 +163,7 @@ function BelgePanel({ isDark, user }: { isDark: boolean; user: any }) {
         body: JSON.stringify({
           company_id: user?.companyId,
           image_base64: file,
+          question: question.trim() ? question.trim() : null,
         }),
       });
       const data = await res.json();
@@ -171,7 +173,7 @@ function BelgePanel({ isDark, user }: { isDark: boolean; user: any }) {
     }
   };
 
-  const clear = () => { setFile(null); setState(EMPTY); };
+  const clear = () => { setFile(null); setState(EMPTY); setQuestion(""); };
 
   return (
     <Card>
@@ -230,9 +232,20 @@ function BelgePanel({ isDark, user }: { isDark: boolean; user: any }) {
                 </span>
               </div>
             ) : !state.result && (
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-                <button
-                  onClick={analyze}
+              <div className="space-y-4">
+                <div className="px-4">
+                  <input
+                    type="text"
+                    placeholder="Belgeyle ilgili özel bir sorunuz var mı? (İsteğe bağlı)"
+                    value={question}
+                    onChange={e => setQuestion(e.target.value)}
+                    className={`w-full max-w-md mx-auto px-4 py-2.5 rounded-xl border text-sm outline-none transition-all ${isDark ? 'bg-slate-800 border-slate-600 text-white placeholder-slate-500 focus:border-emerald-500' : 'bg-white border-slate-200 text-slate-800 placeholder-slate-400 focus:border-emerald-500'}`}
+                    onKeyDown={e => { if (e.key === 'Enter') analyze(); }}
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={analyze}
                   className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-md transition-all flex items-center gap-2"
                 >
                   <Sparkles className="w-4 h-4" /> AI ile Analiz Et
@@ -245,6 +258,7 @@ function BelgePanel({ isDark, user }: { isDark: boolean; user: any }) {
                 >
                   Farklı Dosya Seç
                 </button>
+              </div>
               </div>
             )}
           </div>
