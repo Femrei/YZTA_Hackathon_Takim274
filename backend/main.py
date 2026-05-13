@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
+from agents.invoice_agent import analyze_invoice
 
 # .env dosyasını yükle (GEMINI_API_KEY buradan gelecek)
 env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
@@ -45,13 +46,17 @@ class VisionRequest(BaseModel):
     company_id: str
     image_base64: str
 
+class InvoiceRequest(BaseModel):
+    company_id: str
+    image_base64: str
 
-# ─────────────────────────────────────────────
-# ENDPOINT 1: /ai/chat
+
+
+# ENDPOINT 1:
 # Frontend'deki UzmanAI sayfası buraya bağlanır.
 # company_id ile Firestore'dan bağlam çekip
 # Gemini'ye sorar, cevabı döner.
-# ─────────────────────────────────────────────
+
 @app.post("/ai/chat")
 async def ai_chat(body: ChatRequest):
     try:
@@ -61,11 +66,8 @@ async def ai_chat(body: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ─────────────────────────────────────────────
-# ENDPOINT 2: /ai/stock-advice
-# Stok analizi — Gemini, Firestore'dan stok
-# verilerini çekip sipariş önerileri üretir.
-# ─────────────────────────────────────────────
+# ENDPOINT 2: 
+# Stok analizi — Gemini, Firestore'dan stok verilerini çekip sipariş önerileri üretir.
 @app.post("/ai/stock-advice")
 async def stock_advice(body: CompanyRequest):
     try:
@@ -75,11 +77,7 @@ async def stock_advice(body: CompanyRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ─────────────────────────────────────────────
-# ENDPOINT 3: /ai/daily-summary
-# Günlük özet — stok + bekleyen siparişlerin
-# kısa Türkçe özeti. Admin dashboard için.
-# ─────────────────────────────────────────────
+# ENDPOINT 3: Günlük özet — stok + bekleyen siparişler
 @app.post("/ai/daily-summary")
 async def daily_summary(body: CompanyRequest):
     try:
@@ -89,10 +87,8 @@ async def daily_summary(body: CompanyRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ─────────────────────────────────────────────
-# ENDPOINT 4: /ai/vision-analyze
-# Görüntü işleme - Hastalık ve kalite analizi
-# ─────────────────────────────────────────────
+
+# ENDPOINT 4: Görüntü işleme - Hastalık ve kalite analizi
 @app.post("/ai/vision-analyze")
 async def vision_analyze(body: VisionRequest):
     try:
@@ -103,11 +99,20 @@ async def vision_analyze(body: VisionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ENDPOINT 5: Görüntü İşleme - Fatura Analizi    
+@app.post("/ai/invoice-analyze")
+async def invoice_analyze(body: InvoiceRequest):
+    try:
+        result = await analyze_invoice(body.company_id, body.image_base64)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))    
 
-# ─────────────────────────────────────────────
+
+
 # Sağlık kontrolü — sunucu çalışıyor mu diye
 # basitçe http://localhost:8000/health'e bakabilirsin
-# ─────────────────────────────────────────────
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "message": "DigiCoBig AI backend çalışıyor"}

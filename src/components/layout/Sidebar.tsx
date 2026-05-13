@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, Truck, ShoppingCart, BarChart3,
   Settings, Users, CheckSquare, Bell, BookOpen,
   LogOut, ChevronLeft, ChevronRight, Cpu, User,
-  BrainCircuit, HeartHandshake, ListOrdered,
+  BrainCircuit, HeartHandshake, ListOrdered, Briefcase, FileText,
 } from 'lucide-react';
 import { useAuth, UserRole } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -34,15 +34,18 @@ const adminNav: NavItem[] = [
 const employeeNav: NavItem[] = [
   { key: 'gorevler', label: 'Görevler', icon: CheckSquare, path: '/calisan' },
   { key: 'stok', label: 'Stok Güncelle', icon: Package, path: '/calisan/stok' },
+  { key: 'belge-analizi', label: 'Belge Analizi', icon: FileText, path: '/calisan/belge-analizi' },
   { key: 'bildirimler', label: 'Bildirimler', icon: Bell, path: '/calisan/bildirimler' },
   { key: 'uzman-ai', label: 'Uzman AI', icon: BrainCircuit, path: '/calisan/uzman-ai', dividerBefore: true },
   { key: 'ayarlar', label: 'Ayarlar', icon: Settings, path: '/calisan/ayarlar' },
+  
 ];
 
 const customerNav: NavItem[] = [
   { key: 'siparisler', label: 'Siparişlerim', icon: ListOrdered, path: '/musteri' },
   { key: 'katalog', label: 'Ürün Kataloğu', icon: BookOpen, path: '/musteri/katalog' },
   { key: 'ayarlar', label: 'Hesap & Ayarlar', icon: Settings, path: '/musteri/ayarlar' },
+  {  key: 'is-ilanlari', label: 'İş İlanları', icon: Briefcase, path: '/musteri/is-ilanlari'},
 ];
 
 const navByRole: Record<UserRole, NavItem[]> = {
