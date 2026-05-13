@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Building2, Mail, Phone, MapPin, Globe, Save, CheckCircle, User, Shield, Bell, CreditCard } from 'lucide-react';
+import { Building2, Mail, Phone, MapPin, Globe, Save, CheckCircle, User, Shield, Bell, CreditCard, Send, Clock } from 'lucide-react';
 import { DashboardLayout } from '../../components/layout/DashboardLayout';
 import { Card } from '../../components/ui/Card';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -69,6 +69,17 @@ export function AyarlarAdmin() {
     weeklyReport: false,
     marketplaceSync: true,
   });
+
+  const [telegramSchedule, setTelegramSchedule] = useState({
+    morningEnabled: true,
+    morningTime: '08:00',
+    morningDays: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum'],
+    eveningEnabled: true,
+    eveningTime: '18:00',
+    eveningDays: ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
+  });
+
+  const allDays = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
   const handleSave = () => {
     setSaved(true);
@@ -240,8 +251,8 @@ export function AyarlarAdmin() {
                           : isDark ? 'bg-slate-600' : 'bg-slate-300'
                       }`}
                     >
-                      <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                        notifications[item.key as keyof typeof notifications] ? 'translate-x-5' : 'translate-x-0.5'
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                        notifications[item.key as keyof typeof notifications] ? 'translate-x-5' : 'translate-x-0'
                       }`} />
                     </button>
                   </div>
@@ -260,6 +271,76 @@ export function AyarlarAdmin() {
                 </motion.button>
               </div>
             </Card>
+
+            <div className="mt-6">
+              <Card>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center">
+                    <Send className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>Telegram Otomatik Rapor Zamanlaması</h2>
+                    <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>AI destekli özetlerin otomatik gönderim planı</div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Sabah */}
+                  <div className={`p-4 rounded-xl border ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-white'}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-sky-500" />
+                        <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>Sabah Raporu</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input type="time" value={telegramSchedule.morningTime} onChange={(e) => setTelegramSchedule(p => ({...p, morningTime: e.target.value}))} className={`px-2 py-1 rounded-lg text-sm border outline-none ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200'}`} />
+                        <button onClick={() => setTelegramSchedule(p => ({...p, morningEnabled: !p.morningEnabled}))} className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${telegramSchedule.morningEnabled ? 'bg-emerald-500' : isDark ? 'bg-slate-600' : 'bg-slate-300'}`}>
+                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${telegramSchedule.morningEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {allDays.map(day => (
+                        <button key={day} onClick={() => {
+                          const days = telegramSchedule.morningDays.includes(day) ? telegramSchedule.morningDays.filter(d => d !== day) : [...telegramSchedule.morningDays, day];
+                          setTelegramSchedule(p => ({...p, morningDays: days}));
+                        }} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${telegramSchedule.morningDays.includes(day) ? 'bg-sky-500 text-white' : isDark ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{day}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Akşam */}
+                  <div className={`p-4 rounded-xl border ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-white'}`}>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-indigo-500" />
+                        <span className={`font-medium ${isDark ? 'text-white' : 'text-slate-800'}`}>Gün Özeti</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input type="time" value={telegramSchedule.eveningTime} onChange={(e) => setTelegramSchedule(p => ({...p, eveningTime: e.target.value}))} className={`px-2 py-1 rounded-lg text-sm border outline-none ${isDark ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-50 border-slate-200'}`} />
+                        <button onClick={() => setTelegramSchedule(p => ({...p, eveningEnabled: !p.eveningEnabled}))} className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${telegramSchedule.eveningEnabled ? 'bg-emerald-500' : isDark ? 'bg-slate-600' : 'bg-slate-300'}`}>
+                          <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${telegramSchedule.eveningEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {allDays.map(day => (
+                        <button key={day} onClick={() => {
+                          const days = telegramSchedule.eveningDays.includes(day) ? telegramSchedule.eveningDays.filter(d => d !== day) : [...telegramSchedule.eveningDays, day];
+                          setTelegramSchedule(p => ({...p, eveningDays: days}));
+                        }} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${telegramSchedule.eveningDays.includes(day) ? 'bg-indigo-500 text-white' : isDark ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{day}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end mt-6">
+                  <motion.button onClick={handleSave} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold text-sm transition-all ${saved ? 'bg-emerald-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`}>
+                    {saved ? <><CheckCircle className="w-4 h-4" /> Kaydedildi</> : <><Save className="w-4 h-4" /> Planı Kaydet</>}
+                  </motion.button>
+                </div>
+              </Card>
+            </div>
           </motion.div>
         )}
 

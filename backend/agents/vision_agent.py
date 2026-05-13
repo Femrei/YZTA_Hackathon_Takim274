@@ -24,7 +24,7 @@ async def analyze_vision_image(company_id: str, base64_image: str) -> dict:
 
         api_key = get_gemini_api_key()
         client = genai.Client(api_key=api_key)
-        model_name = "gemini-flash-lite-latest"
+        model_name = "gemini-2.0-flash"
 
         prompt = (
             "Sen bir bitki patolojisi uzmanısın. "

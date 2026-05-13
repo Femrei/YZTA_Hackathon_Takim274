@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import os
+import json
+import urllib.request
 from dotenv import load_dotenv
 from agents.invoice_agent import analyze_invoice
 
@@ -49,7 +51,10 @@ class VisionRequest(BaseModel):
 class InvoiceRequest(BaseModel):
     company_id: str
     image_base64: str
-    question: str = None
+
+class TelegramRequest(BaseModel):
+    company_id: str
+    mode: str = "summary"
 
 
 
@@ -88,6 +93,39 @@ async def daily_summary(body: CompanyRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ENDPOINT 3.5: Telegram'a Günlük Rapor Gönder
+@app.post("/api/telegram/send-daily-summary")
+async def send_telegram_summary(body: TelegramRequest):
+    try:
+        # Token and Chat ID from env
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        
+        if not bot_token or not chat_id:
+            raise HTTPException(status_code=400, detail="Telegram ayarları eksik.")
+
+        # AI'dan günlük özeti al
+        result = await get_stock_advice(body.company_id, mode=body.mode)
+        summary_text = result.get("advice", "Özet alınamadı.")
+        
+        # Telegram API'ye istek at
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = json.dumps({
+            "chat_id": chat_id,
+            "text": f"🚀 DigiCo Günlük Rapor\n\n{summary_text}"
+        }).encode('utf-8')
+        
+        req = urllib.request.Request(url, data=data, headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req) as response:
+            if response.status == 200:
+                return {"status": "success", "message": "Telegram mesajı gönderildi."}
+            else:
+                raise HTTPException(status_code=400, detail="Telegram hatası oluştu.")
+    except Exception as e:
+        print(f"Telegram Hatası: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 # ENDPOINT 4: Görüntü işleme - Hastalık ve kalite analizi
 @app.post("/ai/vision-analyze")
@@ -104,7 +142,7 @@ async def vision_analyze(body: VisionRequest):
 @app.post("/ai/invoice-analyze")
 async def invoice_analyze(body: InvoiceRequest):
     try:
-        result = await analyze_invoice(body.company_id, body.image_base64, body.question)
+        result = await analyze_invoice(body.company_id, body.image_base64)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))    

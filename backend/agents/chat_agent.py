@@ -147,7 +147,7 @@ KURALLAR:
         print("="*50 + "\n")
 
         # Yeni API anahtarinizin ücretsiz kotasina uyan TEK model bu:
-        model_name = "gemini-flash-lite-latest"
+        model_name = "gemini-2.0-flash"
         
         print(f">>> İstek atılan model ismi: {model_name} (Endpoint: v1beta)")
         

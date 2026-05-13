@@ -8,7 +8,7 @@ from firebase_config import db
 def get_key():
     return os.getenv("GEMINI_API_KEY")
 
-async def analyze_invoice(company_id: str, base64_image: str, question: str = None):
+async def analyze_invoice(company_id: str, base64_image: str):
 
     if "," in base64_image:
         _, base64_data = base64_image.split(",", 1)
@@ -19,31 +19,30 @@ async def analyze_invoice(company_id: str, base64_image: str, question: str = No
 
     client = genai.Client(api_key=get_key())
 
-    if question and question.strip():
-        prompt = f"""
-        Sen bir muhasebe ve belge analiz uzmanısın.
-        Kullanıcının yüklediği bu görselle (fatura, fiş, belge vs.) ilgili sorusu şudur:
-        "{question}"
-        
-        Lütfen belgeyi dikkatlice inceleyerek kullanıcının sorusuna doğrudan, açık ve profesyonel bir Türkçe ile yanıt ver.
-        Cevabını Markdown formatında, okunaklı bir şekilde hazırla.
-        """
-    else:
-        prompt = """
-        Sen bir muhasebe uzmanısın.
-        Bu görsel bir fatura, fiş veya herhangi bir belge olabilir.
-        Lütfen belgeden şu bilgileri çıkarıp temiz bir Markdown formatında sun:
-        - **Şirket/Kurum Adı:**
-        - **Tarih:**
-        - **Toplam Tutar:**
-        - **KDV veya Vergi Oranı:**
-        - **Ürün/Hizmet Açıklaması:**
-        
-        Varsa eksik olan veya okunamayan kısımları da belirt. Eğer bu bir fatura değilse, belgenin ne olduğunu ve içeriğinin özetini Markdown olarak hazırla.
-        """
+    prompt = """
+    Sen bir muhasebe uzmanısın.
+
+    Bu görsel bir fatura veya belge olabilir.
+
+    Şu bilgileri çıkar:
+    - Şirket adı
+    - Tarih
+    - Toplam tutar
+    - KDV oranı
+    - Ürün/hizmet açıklaması
+
+    JSON formatında döndür:
+    {
+      "company": "",
+      "date": "",
+      "total": "",
+      "tax": "",
+      "description": ""
+    }
+    """
 
     response = client.models.generate_content(
-        model="gemini-flash-lite-latest",
+        model="gemini-2.0-flash",
         contents=[
             types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
             prompt

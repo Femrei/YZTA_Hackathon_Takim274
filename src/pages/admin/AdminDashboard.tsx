@@ -164,22 +164,14 @@ export function AdminDashboard() {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [actions, setActions] = useState<{ id: number; title: string; description: string; priority: string }[]>(() => {
-    const cached = sessionStorage.getItem('cached_ai_actions');
-    return cached ? JSON.parse(cached) : [];
-  });
+  const [actions, setActions] = useState<{ id: number; title: string; description: string; priority: string }[]>([]);
   const [approvedIds, setApprovedIds] = useState<number[]>([]);
-  const [aiAdviceLoading, setAiAdviceLoading] = useState(() => !sessionStorage.getItem('cached_ai_actions'));
+  const [aiAdviceLoading, setAiAdviceLoading] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [employees, setEmployees] = useState<FSEmployee[]>([]);
   const [orders, setOrders] = useState<FSOrder[]>([]);
   const [products, setProducts] = useState<FSProduct[]>([]);
   const [notifications, setNotifications] = useState<FSNotif[]>([]);
-  const [realInsights, setRealInsights] = useState<{ titleKey: string; title: string; insight: string; trend: 'positive' | 'neutral' | 'negative' }[]>(() => {
-    const cached = sessionStorage.getItem('cached_real_insights');
-    return cached ? JSON.parse(cached) : [];
-  });
-  const [insightsLoading, setInsightsLoading] = useState(() => !sessionStorage.getItem('cached_real_insights'));
 
   useEffect(() => {
     if (!user?.companyId) return;
@@ -210,7 +202,7 @@ export function AdminDashboard() {
 
   const fetchAiAdvice = async () => {
     if (!user?.companyId) return;
-    if (actions.length === 0) setAiAdviceLoading(true);
+    setAiAdviceLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/ai/stock-advice`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -221,55 +213,32 @@ export function AdminDashboard() {
       const d = await res.json();
       const lines = (d.advice as string).split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 10);
       const parsed = lines.slice(0, 4).map((line: string, i: number) => ({ id: Date.now() + i, title: `AI Öneri #${i + 1}`, description: line.replace(/^[-*•\d.]+\s*/, ''), priority: i === 0 ? 'high' : 'normal' }));
-      const finalActions = parsed.length > 0 ? parsed : MOCK_AI_ACTIONS;
-      setActions(finalActions);
-      sessionStorage.setItem('cached_ai_actions', JSON.stringify(finalActions));
-    } catch { 
-      setActions(MOCK_AI_ACTIONS);
-      sessionStorage.setItem('cached_ai_actions', JSON.stringify(MOCK_AI_ACTIONS));
-    }
+      setActions(parsed.length > 0 ? parsed : MOCK_AI_ACTIONS);
+    } catch { setActions(MOCK_AI_ACTIONS); }
     finally { setAiAdviceLoading(false); }
   };
 
-  const fetchRealInsights = async () => {
-    if (!user?.companyId) return;
-    if (realInsights.length === 0) setInsightsLoading(true);
+  useEffect(() => { if (user?.companyId) fetchAiAdvice(); }, [user?.companyId]);
+
+  const sendTelegramReport = async (mode: 'morning' | 'evening') => {
     try {
-      const res = await fetch(`${BACKEND_URL}/ai/daily-summary`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_id: user.companyId }),
+      const res = await fetch(`${BACKEND_URL}/api/telegram/send-daily-summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: user?.companyId,
+          mode: mode
+        })
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json();
-      const lines = (d.advice as string).split('\n').map((l: string) => l.trim()).filter((l: string) => l.includes('|'));
-      const parsed = lines.map((line, i) => {
-        const parts = line.split('|').map(p => p.trim());
-        const trendRaw = parts[2]?.toLowerCase() || 'neutral';
-        const trend = (['positive', 'negative', 'neutral'].includes(trendRaw)) ? trendRaw : 'neutral';
-        return {
-          titleKey: `real-insight-${i}`,
-          title: parts[0] || 'AI Öngörüsü',
-          insight: parts[1] || 'Veri okunamadı',
-          trend: trend as 'positive' | 'neutral' | 'negative'
-        };
-      }).slice(0, 3);
-      if (parsed.length > 0) {
-        setRealInsights(parsed);
-        sessionStorage.setItem('cached_real_insights', JSON.stringify(parsed));
+      if(res.ok) {
+        alert(mode === 'morning' ? "🌅 Sabah raporu Telegram'a başarıyla gönderildi!" : "🌙 Gün özeti Telegram'a başarıyla gönderildi!");
+      } else {
+        alert("❌ Gönderim başarısız oldu.");
       }
-    } catch (e) {
-      console.error("AI Insights Error:", e);
-    } finally {
-      setInsightsLoading(false);
+    } catch(err) {
+      alert("❌ Sunucuya bağlanırken hata oluştu.");
     }
   };
-
-  useEffect(() => { 
-    if (user?.companyId) {
-      fetchAiAdvice();
-      fetchRealInsights();
-    }
-  }, [user?.companyId]);
 
   const handleApprove = (id: number) => {
     setApprovedIds(prev => [...prev, id]);
@@ -309,7 +278,7 @@ export function AdminDashboard() {
         )}
 
         {/* Hızlı Eylemler */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <button onClick={() => setShowTaskModal(true)}
             className={`flex items-center gap-3 p-4 rounded-2xl border-2 border-dashed transition-all ${isDark ? 'border-blue-700/50 hover:border-blue-500 hover:bg-blue-900/20' : 'border-blue-200 hover:border-blue-400 hover:bg-blue-50'}`}>
             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0"><UserPlus className="w-5 h-5 text-white" /></div>
@@ -318,12 +287,31 @@ export function AdminDashboard() {
               <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Çalışan paneline anında düşer</div>
             </div>
           </button>
+          
+          <button onClick={() => sendTelegramReport('morning')}
+            className={`flex items-center gap-3 p-4 rounded-2xl border-2 border-dashed transition-all ${isDark ? 'border-sky-700/50 hover:border-sky-500 hover:bg-sky-900/20' : 'border-sky-200 hover:border-sky-400 hover:bg-sky-50'}`}>
+            <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center flex-shrink-0"><Send className="w-5 h-5 text-white" /></div>
+            <div className="text-left">
+              <div className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>Sabah Raporu</div>
+              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Kargolar ve stok (Telegram)</div>
+            </div>
+          </button>
+
+          <button onClick={() => sendTelegramReport('evening')}
+            className={`flex items-center gap-3 p-4 rounded-2xl border-2 border-dashed transition-all ${isDark ? 'border-indigo-700/50 hover:border-indigo-500 hover:bg-indigo-900/20' : 'border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50'}`}>
+            <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center flex-shrink-0"><CheckCircle className="w-5 h-5 text-white" /></div>
+            <div className="text-left">
+              <div className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>Gün Özeti</div>
+              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Günlük satışlar (Telegram)</div>
+            </div>
+          </button>
+
           <Link to="/admin/is-ilanlari"
             className={`flex items-center gap-3 p-4 rounded-2xl border-2 border-dashed transition-all ${isDark ? 'border-emerald-700/50 hover:border-emerald-500 hover:bg-emerald-900/20' : 'border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50'}`}>
             <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center flex-shrink-0"><Briefcase className="w-5 h-5 text-white" /></div>
             <div className="text-left">
-              <div className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>İş İlanı Yayınla / Başvuruları Görüntüle</div>
-              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Tüm müşteriler & harici ilanlar</div>
+              <div className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>İş İlanı İncele</div>
+              <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Tüm başvurular</div>
             </div>
           </Link>
         </div>
@@ -331,9 +319,9 @@ export function AdminDashboard() {
         {/* AI Insights */}
         <Card>
           <div className="flex items-center gap-2 mb-4"><Sparkles className="w-5 h-5 text-amber-500" /><h2 className={`font-semibold ${isDark ? 'text-white' : 'text-slate-800'}`}>{t('aiInsights')}</h2></div>
-          {(loading || insightsLoading) ? <SkeletonLoader rows={3} /> : (
+          {loading ? <SkeletonLoader rows={3} /> : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {(realInsights.length > 0 ? realInsights : data.aiInsights).map(insight => {
+              {data.aiInsights.map(insight => {
                 const trendColors = { positive: { card: 'from-emerald-500/10 to-teal-500/10 border-emerald-200', icon: 'text-emerald-600 bg-emerald-100' }, neutral: { card: 'from-blue-500/10 to-slate-500/10 border-blue-200', icon: 'text-blue-600 bg-blue-100' }, negative: { card: 'from-red-500/10 to-orange-500/10 border-red-200', icon: 'text-red-600 bg-red-100' } };
                 const colors = trendColors[insight.trend];
                 return (
