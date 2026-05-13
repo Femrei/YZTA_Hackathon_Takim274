@@ -200,19 +200,20 @@ Telegram Integration
 
 ## Dashboard
 
-<img src="screenshots/dashboard.png" width="100%" />
+<img width="1600" height="787" alt="Dashboard" src="https://github.com/user-attachments/assets/239eeba4-ac88-4f74-ae80-28970760eb82" />
 
 ## Analytics
 
-<img src="screenshots/analytics.png" width="100%" />
+<img width="1600" height="787" alt="analitik" src="https://github.com/user-attachments/assets/737d29a2-2875-4b52-ad42-135708f7e25b" />
 
 ## AI Chat
 
-<img src="screenshots/ai-chat.png" width="100%" />
+<img width="1600" height="782" alt="ai-chat" src="https://github.com/user-attachments/assets/685763ab-525a-49d9-815b-7683f03be81f" />
 
 ## Mobile
 
-<img src="screenshots/mobile-view.png" width="100%" />
+<img width="766" height="1599" alt="mobil" src="https://github.com/user-attachments/assets/1bc09138-166a-4462-abcf-e5878a8663ce" />
+
 
 ---
 
